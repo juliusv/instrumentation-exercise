@@ -15,12 +15,15 @@ type demoAPI struct {
 }
 
 func newDemoAPI(reg prometheus.Registerer) *demoAPI {
+	requestDurations := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "some_api_http_request_duration_seconds",
+		Help:    "A histogram of the demo API request durations in seconds.",
+		Buckets: prometheus.LinearBuckets(.05, .025, 10),
+	}, []string{"handler"})
+	reg.MustRegister(requestDurations)
+
 	return &demoAPI{
-		requestDurations: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "some_api_http_request_duration_seconds",
-			Help:    "A histogram of the demo API request durations in seconds.",
-			Buckets: prometheus.LinearBuckets(.05, .025, 10),
-		}, []string{"handler"}),
+		requestDurations: requestDurations,
 	}
 }
 
@@ -63,6 +66,13 @@ func backgroundTask(reg prometheus.Registerer) {
 		Name: "background_task_failures_total",
 		Help: "The total number of background task failures.",
 	})
+	lastSuccess := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "background_task_last_success_timestamp_seconds",
+		Help: "The Unix timestamp in seconds of the last successful background task run.",
+	})
+	reg.MustRegister(totalCount)
+	reg.MustRegister(failureCount)
+	reg.MustRegister(lastSuccess)
 
 	log.Println("Starting background task loop...")
 	bgTicker := time.NewTicker(5 * time.Second)
@@ -74,6 +84,7 @@ func backgroundTask(reg prometheus.Registerer) {
 		// Simulate the background task either succeeding or failing (with a 30% probability).
 		if rand.Float64() > 0.3 {
 			log.Println("Background task completed successfully.")
+			lastSuccess.Set(float64(time.Now().Unix()))
 		} else {
 			failureCount.Inc()
 			log.Println("Background task failed.")
@@ -91,6 +102,8 @@ func main() {
 
 	api := newDemoAPI(prometheus.DefaultRegisterer)
 	api.register(http.DefaultServeMux)
+
+	http.Handle("/metrics", prometheus.Handler())
 
 	log.Fatal(http.ListenAndServe(*listenAddr, nil))
 }

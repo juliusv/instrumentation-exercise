@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type demoAPI struct {
@@ -103,7 +104,7 @@ func main() {
 	api := newDemoAPI(prometheus.DefaultRegisterer)
 	api.register(http.DefaultServeMux)
 
-	http.Handle("/metrics", prometheus.Handler())
+	http.Handle("/metrics", promhttp.Handler())
 
 	log.Fatal(http.ListenAndServe(*listenAddr, nil))
 }

@@ -1,42 +1,53 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import logging
 import random
 import threading
 import time
-from BaseHTTPServer import BaseHTTPRequestHandler
-from BaseHTTPServer import HTTPServer
-from SocketServer import ThreadingMixIn
-from prometheus_client import Histogram, Counter, MetricsHandler, generate_latest, REGISTRY, CONTENT_TYPE_LATEST
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from prometheus_client import (
+    Histogram,
+    Counter,
+    MetricsHandler,
+    generate_latest,
+    REGISTRY,
+    CONTENT_TYPE_LATEST,
+)
+
 
 def handler_404(self):
     self.send_response(404)
+    self.end_headers()
+
 
 def handler_foo(self):
     logging.info("Handling foo...")
-    time.sleep(.075 + random.random() * .05)
+    time.sleep(0.075 + random.random() * 0.05)
     self.send_response(200)
     self.end_headers()
-    self.wfile.write("Handled foo")
+    self.wfile.write(b"Handled foo")
+
 
 def handler_bar(self):
     logging.info("Handling bar...")
-    time.sleep(.15 + random.random() * .1)
+    time.sleep(0.15 + random.random() * 0.1)
 
     self.send_response(200)
     self.end_headers()
-    self.wfile.write("Handled bar")
+    self.wfile.write(b"Handled bar")
+
 
 def handler_metrics(self):
     try:
         output = generate_latest(REGISTRY)
     except:
-        self.send_error(500, 'error generating metrics output')
+        self.send_error(500, "error generating metrics output")
         raise
     self.send_response(200)
-    self.send_header('Content-Type', CONTENT_TYPE_LATEST)
+    self.send_header("Content-Type", CONTENT_TYPE_LATEST)
     self.end_headers()
     self.wfile.write(output)
+
 
 ROUTES = {
     "/api/foo": handler_foo,
@@ -44,12 +55,13 @@ ROUTES = {
     "/metrics": handler_metrics,
 }
 
+
 class Handler(BaseHTTPRequestHandler):
     request_durations = Histogram(
         "some_api_http_request_duration_seconds",
         "A histogram of the demo API request durations in seconds.",
         ["path"],
-        buckets=(.05, .075, .1, .125, .15, .175, .2, .225, .250, .275)
+        buckets=(0.05, 0.075, 0.1, 0.125, 0.15, 0.175, 0.2, 0.225, 0.250, 0.275),
     )
 
     def do_GET(self):
@@ -59,13 +71,16 @@ class Handler(BaseHTTPRequestHandler):
 
         self.request_durations.labels(path=self.path).observe(time.time() - start)
 
-class MultiThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+
+class MultiThreadedHTTPServer(ThreadingHTTPServer):
     pass
+
 
 class Server(threading.Thread):
     def run(self):
-        httpd = MultiThreadedHTTPServer(('', 12345), Handler)
+        httpd = MultiThreadedHTTPServer(("", 12345), Handler)
         httpd.serve_forever()
+
 
 def background_task():
     total_count = Counter(
@@ -88,12 +103,13 @@ def background_task():
             logging.info("Background task completed successfully.")
         else:
             failure_count.inc()
-            logging.warn("Background task failed.")
+            logging.warning("Background task failed.")
         total_count.inc()
 
         time.sleep(5)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     logging.getLogger().setLevel(logging.INFO)
     s = Server()
     s.daemon = True
